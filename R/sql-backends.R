@@ -124,58 +124,71 @@ build_query <- function (x, top = NULL) {
 
 
 
-# #' @importFrom dplyr sql_join
-# #' @export
-# sql_join.SQLServerConnection <- function(con, x, y, type = "inner",
-#   by = NULL, ...) {
-#   join <- switch(type,
-#     left = dplyr::sql("LEFT"),
-#     inner = dplyr::sql("INNER"),
-#     right = dplyr::sql("RIGHT"),
-#     full = dplyr::sql("FULL"),
-#     stop("Unknown join type:", type, call. = FALSE)
-#   )
-#
-#   by <- common_by(by, x, y)
-#
-#   # Ensure tables have unique names
-#   x_names <- auto_names(x$select)
-#   y_names <- auto_names(y$select)
-#   uniques <- unique_names(x_names, y_names, by$x[by$x == by$y])
-#
-#   if (is.null(uniques)) {
-#     sel_vars <- c(x_names, y_names)
-#   } else {
-#     x <- update(x, select = setNames(x$select, uniques$x))
-#     y <- update(y, select = setNames(y$select, uniques$y))
-#
-#     by$x <- unname(uniques$x[by$x])
-#     by$y <- unname(uniques$y[by$y])
-#
-#     sel_vars <- unique(c(uniques$x, uniques$y))
-#   }
-#
-#   xname <- unique_name()
-#   yname <- unique_name()
-#   on <- sql_vector(paste0(
-#     paste0(dplyr::sql_escape_ident(con, xname), ".",
-#       dplyr::sql_escape_ident(con, by$x)),
-#     " = ",
-#     paste0(dplyr::sql_escape_ident(con, yname), ".",
-#       dplyr::sql_escape_ident(con, by$y)),
-#     collapse = " AND "), parens = TRUE)
-#   cond <- dplyr::build_sql("ON ", on, con = con)
-#
-#   from <- dplyr::build_sql(
-#     'SELECT * FROM ',
-#     dplyr::sql_subquery(con, x$query$sql, xname), "\n\n",
-#     join, " JOIN \n\n" ,
-#     dplyr::sql_subquery(con, y$query$sql, yname), "\n\n",
-#     cond, con = con
-#   )
-#   attr(from, "vars") <- lapply(sel_vars, as.name)
-#
-#   from
-# }
-#
+#' @importFrom dplyr sql_join
+#' @export
+sql_join.SQLServerConnection <- function(con, x, y, type = "inner",
+                                         by = NULL, ...)
+{
+  join <- switch(type,
+                 left = sql("LEFT"),
+                 inner = sql("INNER"),
+                 right = sql("RIGHT"),
+                 full = sql("FULL"),
+                 stop("Unknown join type:", type, call. = FALSE)
+  )
+  
+  by <- dplyr:::common_by(by, x, y)
+  
+  # Ensure tables have unique names
+  x_names <- dplyr:::auto_names(x$select)
+  y_names <- dplyr:::auto_names(y$select)
+  uniques <- unique_names(x_names, y_names, by$x[by$x == by$y])
+  
+  if (is.null(uniques)) {
+    sel_vars <- c(x_names, y_names)
+  } else {
+    x <- update(x, select = setNames(x$select, uniques$x))
+    y <- update(y, select = setNames(y$select, uniques$y))
+    
+    by$x <- unname(uniques$x[by$x])
+    by$y <- unname(uniques$y[by$y])
+    
+    sel_vars <- unique(c(uniques$x, uniques$y))
+  }
+  
+  xname <- dplyr:::unique_name()
+  yname <- dplyr:::unique_name()
+  on <- dplyr:::sql_vector(paste0(
+    paste0(sql_escape_ident(con, xname), ".", sql_escape_ident(con, by$x)),
+    " = ",
+    paste0(sql_escape_ident(con, yname), ".", sql_escape_ident(con, by$y)),
+    collapse = " AND "), parens = TRUE)
+  cond <- build_sql("ON ", on, con = con)
+  
+  from <- build_sql(
+    'SELECT * FROM ',
+    dplyr:::sql_subquery(con, x$query$sql, xname), "\n\n",
+    join, " JOIN \n\n" ,
+    dplyr:::sql_subquery(con, y$query$sql, yname), "\n\n",
+    cond, con = con
+  )
+  attr(from, "vars") <- lapply(sel_vars, as.name)
+  
+  from
+}
 
+unique_names <- function(x_names, y_names, by, x_suffix = ".x", y_suffix = ".y") {
+  # See: https://github.com/hadley/dplyr/issues/709
+  common <- intersect(x_names, y_names)
+  if (length(common) == 0) return(NULL)
+  
+  x_match <- match(common, x_names)
+  x_new <- x_names
+  x_new[x_match] <- paste0(x_names[x_match], x_suffix)
+  
+  y_match <- match(common, y_names)
+  y_new <- y_names
+  y_new[y_match] <- paste0(y_names[y_match], y_suffix)
+  
+  list(x = setNames(x_new, x_names), y = setNames(y_new, y_names))
+}
