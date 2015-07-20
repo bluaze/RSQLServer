@@ -1,4 +1,4 @@
-#' @importFrom methods setClass setMethod
+#' @importFrom methods setClass setMethod show
 #' @import DBI
 NULL
 
